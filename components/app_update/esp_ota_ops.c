@@ -197,11 +197,7 @@ esp_err_t esp_ota_begin(const esp_partition_t *partition, size_t image_size, esp
         return ESP_ERR_NO_MEM;
     }
     new_entry->need_erase = (image_size == OTA_WITH_SEQUENTIAL_WRITES);
-    *out_handle = new_entry->handle;
 
-    if (partition->type == ESP_PARTITION_TYPE_BOOTLOADER) {
-        esp_image_bootloader_offset_set(partition->address);
-    }
     if (partition->type == ESP_PARTITION_TYPE_BOOTLOADER || partition->type == ESP_PARTITION_TYPE_PARTITION_TABLE) {
         esp_flash_set_dangerous_write_protection(esp_flash_default_chip, false);
     }
@@ -216,8 +212,17 @@ esp_err_t esp_ota_begin(const esp_partition_t *partition, size_t image_size, esp
         }
         esp_err_t err = esp_partition_erase_range(partition, 0, erase_size);
         if (err != ESP_OK) {
+            if (partition->type == ESP_PARTITION_TYPE_BOOTLOADER || partition->type == ESP_PARTITION_TYPE_PARTITION_TABLE) {
+                esp_flash_set_dangerous_write_protection(esp_flash_default_chip, true);
+            }
+            LIST_REMOVE(new_entry, entries);
+            free(new_entry);
             return err;
         }
+    }
+
+    if (partition->type == ESP_PARTITION_TYPE_BOOTLOADER) {
+        esp_image_bootloader_offset_set(partition->address);
     }
 
 #ifdef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
@@ -226,6 +231,7 @@ esp_err_t esp_ota_begin(const esp_partition_t *partition, size_t image_size, esp
     }
 #endif
 
+    *out_handle = new_entry->handle;
     return ESP_OK;
 }
 

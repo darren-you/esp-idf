@@ -45,6 +45,22 @@ TEST_CASE("esp_ota_begin() verifies arguments", "[ota]")
     TEST_ASSERT_EQUAL(0, handle);
 }
 
+TEST_CASE("esp_ota_begin() releases the partition after erase failure", "[ota]")
+{
+    const esp_partition_t *partition = esp_ota_get_next_update_partition(NULL);
+    TEST_ASSERT_NOT_NULL(partition);
+
+    // The erase-size check rejects this request before any flash operation.
+    esp_ota_handle_t handle = 0;
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_SIZE,
+                      esp_ota_begin(partition, partition->size + partition->erase_size, &handle));
+    TEST_ASSERT_EQUAL(0, handle);
+
+    // A failed begin must not leave a live entry blocking the same partition.
+    TEST_ESP_OK(esp_ota_begin(partition, OTA_WITH_SEQUENTIAL_WRITES, &handle));
+    TEST_ESP_OK(esp_ota_abort(handle));
+}
+
 TEST_CASE("esp_ota_get_next_update_partition logic", "[ota]")
 {
     const esp_partition_t *running = esp_ota_get_running_partition();

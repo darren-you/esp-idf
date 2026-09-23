@@ -889,13 +889,16 @@ esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *co
         goto error;
     }
 
-    _success = (
-                   (client->transport_list = esp_transport_list_init()) &&
-                   (tcp = esp_transport_tcp_init()) &&
-                   (esp_transport_set_default_port(tcp, DEFAULT_HTTP_PORT) == ESP_OK) &&
-                   (esp_transport_list_add(client->transport_list, tcp, "http") == ESP_OK)
-               );
-    if (!_success) {
+    client->transport_list = esp_transport_list_init();
+    if (client->transport_list != NULL) {
+        tcp = esp_transport_tcp_init();
+    }
+    if (tcp == NULL || esp_transport_set_default_port(tcp, DEFAULT_HTTP_PORT) != ESP_OK ||
+        esp_transport_list_add(client->transport_list, tcp, "http") != ESP_OK) {
+        /* The list owns tcp only after esp_transport_list_add succeeds. */
+        if (tcp != NULL) {
+            esp_transport_destroy(tcp);
+        }
         ESP_LOGE(TAG, "Error initialize transport");
         goto error;
     }
@@ -906,13 +909,13 @@ esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *co
 
 #ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS
     esp_transport_handle_t ssl = NULL;
-    _success = (
-                   (ssl = esp_transport_ssl_init()) &&
-                   (esp_transport_set_default_port(ssl, DEFAULT_HTTPS_PORT) == ESP_OK) &&
-                   (esp_transport_list_add(client->transport_list, ssl, "https") == ESP_OK)
-               );
-
-    if (!_success) {
+    ssl = esp_transport_ssl_init();
+    if (ssl == NULL || esp_transport_set_default_port(ssl, DEFAULT_HTTPS_PORT) != ESP_OK ||
+        esp_transport_list_add(client->transport_list, ssl, "https") != ESP_OK) {
+        /* The list owns ssl only after esp_transport_list_add succeeds. */
+        if (ssl != NULL) {
+            esp_transport_destroy(ssl);
+        }
         ESP_LOGE(TAG, "Error initialize SSL Transport");
         goto error;
     }
